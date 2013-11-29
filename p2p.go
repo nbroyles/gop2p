@@ -1,20 +1,4 @@
 /**
-* Event loop, wait for input?
-*
-* To send file:
-* - enter ip
-* - enter file
-* - send file 
-* - update on progress
-*
-* To receive file:
-* - run client
-* - on file receive
-*   - display prompt to accept
-*   - save to disk and update as sent
-*/
-
-/**
 *
 * TODO
 * ----
@@ -22,6 +6,11 @@
 * . do file transfers in separate thread
 * . show current transfers
 *
+*
+* file transfers in a separate thread
+* ---
+* . open listener in thread and wait for transfers
+* . how to interrupt current display with request to accept transfer?
 **/
 
 package main
@@ -37,6 +26,7 @@ import (
 func main() {
     var input int
     for {
+//        waitForTransfers()
         printInstructions()
         fmt.Scanf("%d", &input)
         switch input {
@@ -45,6 +35,11 @@ func main() {
         }
     }
 }
+
+/*func waitForTransfers() {
+    go func() {
+    }()
+}*/
 
 func printInstructions() {
     fmt.Println("GoP2P")
@@ -98,9 +93,26 @@ func receiveFile() {
     fmt.Println("Waiting for connection...")
     conn, _ := listener.Accept()
 
-    fileHandle, _ := os.Create("output")
+    var accept string
+    fmt.Println("Incoming file transfer from " + conn.RemoteAddr().String() + 
+        ".  Accept? [yn]")
+    fmt.Scanf("%s", &accept)
+
+    if accept != "y" {
+        return  
+    }
+
+    var fileName string
+    fmt.Println("Enter a file name:")
+    fmt.Scanf("%s", &fileName)
+
+
+    // have a connection -- open another thread to wait for transfers
+    //waitForTransfers()
+
+    fileHandle, _ := os.Create(fileName)
     if err != nil {
-        log.Print("Couldn't create file: output")
+        log.Print("Couldn't create file: " + fileName)
     }
 
     defer fileHandle.Close()
