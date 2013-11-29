@@ -2,15 +2,14 @@
 *
 * TODO
 * ----
-* . specify output file
-* . do file transfers in separate thread
+* . fix bug with reading input in goroutine (it's empty -- use channels?)
 * . show current transfers
-*
+* . communicate p2p without needing to know port...possible?
 *
 * file transfers in a separate thread
 * ---
-* . open listener in thread and wait for transfers
-* . how to interrupt current display with request to accept transfer?
+* . as currently implemented, incoming transfer will interrupt
+*   whatever's going on at the time
 **/
 
 package main
@@ -21,35 +20,62 @@ import (
     "log"
     "net"
     "os"
+    "strconv"
 )
 
+var config struct {
+    recvPort int
+}
+
 func main() {
+    // NOTE: This whole port detection thing is bad.  As currently structured,
+    // 1 port needed for each file transfer.  Think there is a way to share a
+    // port?
+    config.recvPort = getPortForTransfers()
+    if config.recvPort == -1 {
+        fmt.Println("Couldn't find open port for transfers. Exiting")
+        return
+    } else {
+        fmt.Println("Listening for transfers on port " +
+            strconv.Itoa(config.recvPort))
+    }
+
+    waitForTransfers()
+
     var input int
     for {
-//        waitForTransfers()
         printInstructions()
         fmt.Scanf("%d", &input)
         switch input {
             case 1: sendFile()
-            case 2: receiveFile()
+            case 2: showCurrentTransfers()
         }
     }
 }
 
-/*func waitForTransfers() {
-    go func() {
-    }()
-}*/
+func getPortForTransfers() int {
+    for checkPort := 28321; checkPort < 28332; checkPort++ {
+        if isPortOpen(checkPort) {
+            return checkPort
+        }
+    }
+
+    return -1
+}
+
+func waitForTransfers() {
+    go receiveFile();
+}
 
 func printInstructions() {
     fmt.Println("GoP2P")
     fmt.Println("-----")
     fmt.Println("[1] Send file")
-    fmt.Println("[2] Wait for transfer")
+    fmt.Println("[2] Show current transfers")
 }
 
 func sendFile() {
-    fmt.Println("Enter an IP address:")
+    fmt.Println("Enter an IP address (incl. port):")
     var ipAddress string
     fmt.Scanf("%s", &ipAddress)
 
@@ -57,8 +83,7 @@ func sendFile() {
     var filePath string
     fmt.Scanf("%s", &filePath)
 
-    // TODO: this port could be in use, then what?
-    conn, err := net.Dial("tcp", ipAddress + ":28321")
+    conn, err := net.Dial("tcp", ipAddress)
 
     // TODO: When reading and writing in chunks, can spit out progress
     // TODO: Also considering firing up send in a separate thread/go routine
@@ -72,8 +97,8 @@ func sendFile() {
     file := bufio.NewReader(fileHandle)
 
     buffer := make([]byte, 1024)
-    for { 
-        bytesRead, _ := file.Read(buffer) 
+    for {
+        bytesRead, _ := file.Read(buffer)
         if bytesRead == 0 { break }
 
         conn.Write(buffer)
@@ -82,7 +107,7 @@ func sendFile() {
 }
 
 func receiveFile() {
-    listener, err := net.Listen("tcp", ":28321")
+    listener, err := net.Listen("tcp", ":" + strconv.Itoa(config.recvPort))
     if err != nil {
         log.Print(err)
         return
@@ -90,16 +115,18 @@ func receiveFile() {
 
     defer listener.Close()
 
-    fmt.Println("Waiting for connection...")
     conn, _ := listener.Accept()
 
     var accept string
-    fmt.Println("Incoming file transfer from " + conn.RemoteAddr().String() + 
+    fmt.Println("Incoming file transfer from " + conn.RemoteAddr().String() +
         ".  Accept? [yn]")
     fmt.Scanf("%s", &accept)
+    fmt.Println("---------------")
+    fmt.Print(accept)
+    fmt.Println("---------------")
 
     if accept != "y" {
-        return  
+        return
     }
 
     var fileName string
@@ -128,4 +155,19 @@ func receiveFile() {
     }
 
     file.Flush()
+}
+
+func isPortOpen(port int) bool {
+    listener, err := net.Listen("tcp", ":" + strconv.Itoa(port))
+
+    if err != nil {
+        return false
+    } else {
+        listener.Close()
+        return true
+    }
+}
+
+func showCurrentTransfers() {
+
 }
